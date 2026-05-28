@@ -11,7 +11,24 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
+type Auth struct {
+	AppKey    string
+	AppSecret string
+}
+
+func (a *Auth) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	return map[string]string{"app_key": a.AppKey, "app_secret": a.AppSecret}, nil
+}
+
+func (a *Auth) RequireTransportSecurity() bool {
+	return false
+}
+
 func main() {
+	auth := &Auth{
+		AppKey:    "go-programming-tour-book",
+		AppSecret: "go-programming-tour-book",
+	}
 	ctx := context.Background()
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithUnaryInterceptor(
@@ -20,7 +37,12 @@ func main() {
 	opts = append(opts, grpc.WithStreamInterceptor(
 		grpc_middleware.ChainStreamClient(middleware.StreamContextTimeout()),
 	))
+	opts = append(opts, grpc.WithPerRPCCredentials(auth))
 	clientConn, err := GetClientConn(ctx, "localhost:8004", opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer clientConn.Close()
 	tagClient := pb.NewTagServiceClient(clientConn)
 	resp, err := tagClient.GetTagList(ctx, &pb.GetTagListRequest{Name: "Golang"})
 	if err != nil {

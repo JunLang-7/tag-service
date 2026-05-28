@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 
 	"golang.org/x/net/context/ctxhttp"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -30,6 +32,8 @@ func NewAPI(url string) *API {
 }
 
 func (a *API) GetTagList(ctx context.Context, name string) ([]byte, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	log.Printf("metadata: %v", md)
 	token, err := a.getAccessToken(ctx)
 	if err != nil {
 		return nil, err
