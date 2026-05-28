@@ -9,10 +9,12 @@ import (
 	"path"
 	"strings"
 
+	"github.com/JunLang-7/tag-service/internal/middleware"
 	"github.com/JunLang-7/tag-service/pkg/swagger"
 	pb "github.com/JunLang-7/tag-service/proto"
 	"github.com/JunLang-7/tag-service/server"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -81,7 +83,14 @@ func RunHttpServer(port string) *http.ServeMux {
 }
 
 func RunGrpcServer() *grpc.Server {
-	s := grpc.NewServer()
+	opts := []grpc.ServerOption{
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			middleware.AccessLog,
+			middleware.ErrorLog,
+			middleware.Recovery,
+		)),
+	}
+	s := grpc.NewServer(opts...)
 	pb.RegisterTagServiceServer(s, server.NewTagServer())
 	reflection.Register(s)
 	return s
