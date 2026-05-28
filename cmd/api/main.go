@@ -9,8 +9,10 @@ import (
 	"path"
 	"strings"
 
+	"github.com/JunLang-7/tag-service/global"
 	"github.com/JunLang-7/tag-service/internal/middleware"
 	"github.com/JunLang-7/tag-service/pkg/swagger"
+	"github.com/JunLang-7/tag-service/pkg/tracer"
 	pb "github.com/JunLang-7/tag-service/proto"
 	"github.com/JunLang-7/tag-service/server"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
@@ -37,6 +39,10 @@ type httpError struct {
 func init() {
 	flag.StringVar(&port, "port", "8004", "server port")
 	flag.Parse()
+	err := setupTracer()
+	if err != nil {
+		log.Fatalf("init.setupTracer err: %v", err)
+	}
 }
 
 func main() {
@@ -88,6 +94,7 @@ func RunGrpcServer() *grpc.Server {
 			middleware.AccessLog,
 			middleware.ErrorLog,
 			middleware.Recovery,
+			middleware.ServerTracing,
 		)),
 	}
 	s := grpc.NewServer(opts...)
@@ -139,4 +146,14 @@ func grpcHandlerFunc(grpcServer *grpc.Server, otherHandler http.Handler) http.Ha
 			otherHandler.ServeHTTP(w, r)
 		}
 	}), &http2.Server{})
+}
+
+func setupTracer() error {
+	var err error
+	jaegerTracer, _, err := tracer.NewJaegerTracer("ariticle-servce", "127.0.0.1:6831")
+	if err != nil {
+		return err
+	}
+	global.Tracer = jaegerTracer
+	return nil
 }

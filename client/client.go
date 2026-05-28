@@ -4,7 +4,9 @@ import (
 	"context"
 	"log"
 
+	"github.com/JunLang-7/tag-service/global"
 	"github.com/JunLang-7/tag-service/internal/middleware"
+	"github.com/JunLang-7/tag-service/pkg/tracer"
 	pb "github.com/JunLang-7/tag-service/proto"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"google.golang.org/grpc"
@@ -24,6 +26,13 @@ func (a *Auth) RequireTransportSecurity() bool {
 	return false
 }
 
+func init() {
+	err := setupTracer()
+	if err != nil {
+		log.Fatalf("init.setupTracer err: %v", err)
+	}
+}
+
 func main() {
 	auth := &Auth{
 		AppKey:    "go-programming-tour-book",
@@ -32,7 +41,7 @@ func main() {
 	ctx := context.Background()
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithUnaryInterceptor(
-		grpc_middleware.ChainUnaryClient(middleware.UnaryContextTimeout()),
+		grpc_middleware.ChainUnaryClient(middleware.UnaryContextTimeout(), middleware.ClientTracing()),
 	))
 	opts = append(opts, grpc.WithStreamInterceptor(
 		grpc_middleware.ChainStreamClient(middleware.StreamContextTimeout()),
@@ -55,4 +64,14 @@ func main() {
 func GetClientConn(ctx context.Context, target string, opts []grpc.DialOption) (*grpc.ClientConn, error) {
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	return grpc.NewClient(target, opts...)
+}
+
+func setupTracer() error {
+	var err error
+	jaegerTracer, _, err := tracer.NewJaegerTracer("blog-service", "127.0.0.1:6831")
+	if err != nil {
+		return err
+	}
+	global.Tracer = jaegerTracer
+	return nil
 }

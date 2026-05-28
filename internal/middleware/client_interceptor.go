@@ -4,7 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/JunLang-7/tag-service/global"
+	"github.com/JunLang-7/tag-service/pkg/metatext"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 )
 
 func UnaryContextTimeout() grpc.UnaryClientInterceptor {
@@ -34,4 +39,33 @@ func defaultContextTimeout(ctx context.Context) (context.Context, context.Cancel
 		ctx, cancel = context.WithTimeout(ctx, defaultTimeout)
 	}
 	return ctx, cancel
+}
+
+func ClientTracing() grpc.UnaryClientInterceptor {
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		var spanOpts []opentracing.StartSpanOption
+		parentSpan := opentracing.SpanFromContext(ctx)
+		if parentSpan != nil {
+			parentCtx := parentSpan.Context()
+			spanOpts = append(spanOpts, opentracing.ChildOf(parentCtx))
+		}
+		spanOpts = append(spanOpts, []opentracing.StartSpanOption{
+			opentracing.Tag{Key: string(ext.Component), Value: "gRPC"},
+			ext.SpanKindRPCClient,
+		}...)
+
+		span := global.Tracer.StartSpan(method, spanOpts...)
+		defer span.Finish()
+
+		md, ok := metadata.FromOutgoingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+		err := global.Tracer.Inject(span.Context(), opentracing.TextMap, metatext.MetadataTextMap{MD: md})
+		if err != nil {
+			return err
+		}
+		newCtx := opentracing.ContextWithSpan(metadata.NewOutgoingContext(ctx, md), span)
+		return invoker(newCtx, method, req, reply, cc, opts...)
+	}
 }
