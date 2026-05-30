@@ -6,7 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+
+	"golang.org/x/net/context/ctxhttp"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -28,6 +32,8 @@ func NewAPI(url string) *API {
 }
 
 func (a *API) GetTagList(ctx context.Context, name string) ([]byte, error) {
+	md, _ := metadata.FromIncomingContext(ctx)
+	log.Printf("metadata: %v", md)
 	token, err := a.getAccessToken(ctx)
 	if err != nil {
 		return nil, err
@@ -55,7 +61,7 @@ func (a *API) getAccessToken(ctx context.Context) (string, error) {
 }
 
 func (a *API) httpGet(ctx context.Context, path string) ([]byte, error) {
-	resp, err := http.Get(fmt.Sprintf("%s%s", a.URL, path))
+	resp, err := ctxhttp.Get(ctx, http.DefaultClient, fmt.Sprintf("%s%s", a.URL, path))
 	if err != nil {
 		return nil, err
 	}
@@ -69,13 +75,7 @@ func (a *API) httpGet(ctx context.Context, path string) ([]byte, error) {
 
 func (a *API) httpPost(ctx context.Context, path string, data map[string]string) ([]byte, error) {
 	jsonData, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s%s", a.URL, path), bytes.NewReader(jsonData))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := a.Client.Do(req)
+	resp, err := ctxhttp.Post(ctx, http.DefaultClient, fmt.Sprintf("%s%s", a.URL, path), "application/json", bytes.NewReader(jsonData))
 	if err != nil {
 		return nil, err
 	}
